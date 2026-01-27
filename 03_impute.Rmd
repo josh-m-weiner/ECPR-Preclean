@@ -291,6 +291,10 @@ cat("Missing values:", sum(is.na(data_imp$hems_launch_time)), "\n\n")
 
 cat("Distribution (minutes):\n")
 print(summary(data_imp$hems_launch_time))
+
+z<-data_imp %>% filter(abs(call_to_cann_hosp_time) > 400
+                       ) %>%
+  select(2,3,5,9:15,23:29,38,39)
 ```
 
 ## Save Imputed Data

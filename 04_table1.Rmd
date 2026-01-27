@@ -9,7 +9,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 ## Load Data
 
-```{r load_data}
+```{r load_data_packages}
 library(tidyverse)
 
 load("clean_data/data_imputed.RData")
