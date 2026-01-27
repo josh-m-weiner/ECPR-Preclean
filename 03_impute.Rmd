@@ -117,7 +117,7 @@ knitr::kable(missing_by_ecmo,
              col.names = c("ECMO Initiated", "Total Rows", "call_911_dt Missing", "% Missing"))
 ```
 
-### Cross-tabulation: Cohort x ECMO Status
+### Crosstab: Cohort x ECMO Status
 
 ```{r call_911_missing_crosstab}
 missing_crosstab <- data_imp %>%
@@ -167,7 +167,7 @@ if (nrow(validation_data) > 0) {
       # Compare to listed flight time
       flight_time_diff = actual_diff_minutes - hems_flight_time
     ) %>%
-    select(record_id, ems_hospital_dt, hems_depart, hems_depart_dt, hems_flight_time,
+    select(patient_id, ems_hospital_dt, hems_depart, hems_depart_dt, hems_flight_time,
            actual_diff_minutes, flight_time_diff)
 
   cat("=== Validation Summary ===\n")
@@ -185,6 +185,20 @@ if (nrow(validation_data) > 0) {
   knitr::kable(validation_check,
                col.names = c("Record ID", "ems_hospital_dt", "hems_depart", "hems_depart_dt",
                             "hems_flight_time (min)", "Actual Diff (min)", "Difference"))
+
+  # Identify rows with negative actual_diff_minutes (impossible: arrival before departure)
+  negative_diff_ids <- validation_check %>%
+    filter(actual_diff_minutes < 0) %>%
+    pull(patient_id)
+
+  if (length(negative_diff_ids) > 0) {
+    cat("\n=== Negative Time Difference Detected ===\n")
+    cat("Setting ems_hospital_dt to NULL for", length(negative_diff_ids), "rows with negative actual diff\n")
+
+    # Set ems_hospital_dt to NA for rows with negative difference
+    data_imp <- data_imp %>%
+      mutate(ems_hospital_dt = if_else(patient_id %in% negative_diff_ids, as.POSIXct(NA), ems_hospital_dt))
+  }
 } else {
   cat("No rows found with all three fields present for validation.\n")
 }
@@ -227,6 +241,56 @@ data_imp <- data_imp %>%
 
 cat("ems_hospital_dt values imputed:", n_ems_impute_candidates, "\n")
 cat("ems_hospital_dt still missing after imputation:", sum(is.na(data_imp$ems_hospital_dt)), "\n")
+```
+
+## Calculate Times
+
+### call_to_cann_hosp_time
+
+Time from 9-1-1 call to ECMO cannulation hospital arrival (in minutes).
+
+```{r call_to_cann_hosp_time}
+data_imp <- data_imp %>%
+  mutate(
+    call_to_cann_hosp_time = as.numeric(difftime(ems_hospital_dt, call_911_dt, units = "mins"))
+  )
+
+cat("=== call_to_cann_hosp_time Summary ===\n")
+cat("Non-missing values:", sum(!is.na(data_imp$call_to_cann_hosp_time)), "\n")
+cat("Missing values:", sum(is.na(data_imp$call_to_cann_hosp_time)), "\n\n")
+
+# Check for negative values (should not occur)
+n_negative <- sum(data_imp$call_to_cann_hosp_time < 0, na.rm = TRUE)
+if (n_negative > 0) {
+  cat("WARNING:", n_negative, "rows have negative call_to_cann_hosp_time\n")
+} else {
+  cat("All values are positive (as expected)\n")
+}
+
+cat("\nDistribution (minutes):\n")
+print(summary(data_imp$call_to_cann_hosp_time))
+```
+
+### hems_launch_time
+
+Time from HEMS request to HEMS en route (in minutes).
+
+```{r hems_launch_time}
+data_imp <- data_imp %>%
+  mutate(
+    # hms objects store time as seconds since midnight
+    # Subtract directly and convert to minutes
+    hems_launch_time = as.numeric(hems_enroute - hems_request) / 60,
+    # Handle midnight crossing: if negative, add 24 hours (1440 minutes)
+    hems_launch_time = if_else(hems_launch_time < 0, hems_launch_time + 1440, hems_launch_time)
+  )
+
+cat("=== hems_launch_time Summary ===\n")
+cat("Non-missing values:", sum(!is.na(data_imp$hems_launch_time)), "\n")
+cat("Missing values:", sum(is.na(data_imp$hems_launch_time)), "\n\n")
+
+cat("Distribution (minutes):\n")
+print(summary(data_imp$hems_launch_time))
 ```
 
 ## Save Imputed Data

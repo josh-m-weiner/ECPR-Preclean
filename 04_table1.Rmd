@@ -1,0 +1,170 @@
+---
+title: "Table 1: All Patients Treated with the MMRC FLIGHT-ECPR Protocol"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Load Data
+
+```{r load_data}
+library(tidyverse)
+
+load("clean_data/data_imputed.RData")
+
+# Filter to only RV and nRV cohorts
+table_data <- data_imp %>%
+  filter(cohort %in% c("RV", "nRV"))
+
+```
+
+```{r helper_functions, echo=FALSE}
+# Format mean (SD)
+mean_sd <- function(x) {
+  if (all(is.na(x))) return("--")
+  sprintf("%.1f (%.1f)", mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
+}
+
+# Format n (%)
+n_pct <- function(x, condition = 1) {
+  n <- sum(x == condition, na.rm = TRUE)
+  total <- sum(!is.na(x))
+  if (total == 0) return("--")
+  sprintf("%d (%.1f%%)", n, n / total * 100)
+}
+
+# Format count
+n_count <- function(x) {
+  sum(!is.na(x))
+}
+```
+
+## Calculate Statistics by ECMO Status
+
+```{r calculate_stats}
+# Split data by ECMO status
+cannulated <- table_data %>% filter(ecmo_yn == 1)
+not_cannulated <- table_data %>% filter(ecmo_yn == 0)
+
+```
+
+## Table 1
+
+```{r table1}
+# Build table data frame
+table1 <- data.frame(
+  Variable = c(
+    "Total Number",
+    "Age, mean (SD)",
+    "Sex, % male",
+    "Race, % White",
+    "Race, % African American",
+    "9-1-1 call to hospital arrival time (min), mean (SD)",
+    "HEMS launch time (min), mean (SD)",
+    "HEMS scene time (min), mean (SD)",
+    "HEMS flight time (min), mean (SD)",
+    "Needle stick to ECMO time (min), mean (SD)",
+    "VT/VF, n (%)",
+    "Witnessed cardiac arrest, n (%)",
+    "Bystander CPR, n (%)",
+    "LUCAS placed, n (%)",
+    "Field intubation, n (%)",
+    "Number of shocks, mean (SD)",
+    "Lactate, mean (SD)",
+    "pH, mean (SD)",
+    "Low flow time (min), mean (SD)",
+    "Days on V-A ECMO, mean (SD)",
+    "Hospital LOS (days), mean (SD)",
+    "Alive at discharge, n (%)"
+  ),
+
+  Cannulated = c(
+    nrow(cannulated),
+    mean_sd(cannulated$age),
+    n_pct(cannulated$sex, 1),
+    n_pct(cannulated$race, 1),
+    n_pct(cannulated$race, 2),
+    mean_sd(cannulated$call_to_cann_hosp_time),
+    mean_sd(cannulated$hems_launch_time),
+    mean_sd(cannulated$hems_scene_time),
+    mean_sd(cannulated$hems_flight_time),
+    mean_sd(cannulated$ecmo_time),
+    n_pct(cannulated$init_rhythm, "VT/VF"),
+    n_pct(cannulated$witnessed, 1),
+    n_pct(cannulated$bystander_cpr, 1),
+    n_pct(cannulated$lucas, 1),
+    n_pct(cannulated$field_intubation, 1),
+    mean_sd(cannulated$n_shocks),
+    mean_sd(cannulated$lactate),
+    mean_sd(cannulated$ph),
+    mean_sd(cannulated$low_flow_time),
+    mean_sd(cannulated$ecmo_days),
+    mean_sd(cannulated$los_days),
+    n_pct(cannulated$alive, 1)
+  ),
+
+  Not_Cannulated = c(
+    nrow(not_cannulated),
+    mean_sd(not_cannulated$age),
+    n_pct(not_cannulated$sex, 1),
+    n_pct(not_cannulated$race, 1),
+    n_pct(not_cannulated$race, 2),
+    mean_sd(not_cannulated$call_to_cann_hosp_time),
+    mean_sd(not_cannulated$hems_launch_time),
+    mean_sd(not_cannulated$hems_scene_time),
+    mean_sd(not_cannulated$hems_flight_time),
+    "N/A",
+    n_pct(not_cannulated$init_rhythm, "VT/VF"),
+    n_pct(not_cannulated$witnessed, 1),
+    n_pct(not_cannulated$bystander_cpr, 1),
+    n_pct(not_cannulated$lucas, 1),
+    n_pct(not_cannulated$field_intubation, 1),
+    mean_sd(not_cannulated$n_shocks),
+    mean_sd(not_cannulated$lactate),
+    mean_sd(not_cannulated$ph),
+    mean_sd(not_cannulated$low_flow_time),
+    "N/A",
+    mean_sd(not_cannulated$los_days),
+    n_pct(not_cannulated$alive, 1)
+  )
+)
+
+knitr::kable(table1, col.names = c("Variable", "Patients Cannulated for ECPR", "Patients Not Cannulated for ECPR"))
+```
+
+## Missingness Summary
+
+```{r missingness, echo=FALSE}
+# Show missingness for key variables
+vars_of_interest <- c("age", "sex", "race", "call_to_cann_hosp_time", "hems_launch_time",
+                      "hems_scene_time", "hems_flight_time", "ecmo_time", "init_rhythm",
+                      "witnessed", "bystander_cpr", "lucas", "field_intubation", "n_shocks",
+                      "lactate", "ph", "low_flow_time", "ecmo_days", "los_days", "alive")
+
+missingness <- data.frame(
+  Variable = vars_of_interest,
+  Cannulated_Missing = sapply(vars_of_interest, function(v) {
+    if (v %in% names(cannulated)) sum(is.na(cannulated[[v]])) else NA
+  }),
+  Cannulated_Total = nrow(cannulated),
+  NotCannulated_Missing = sapply(vars_of_interest, function(v) {
+    if (v %in% names(not_cannulated)) sum(is.na(not_cannulated[[v]])) else NA
+  }),
+  NotCannulated_Total = nrow(not_cannulated)
+)
+
+rownames(missingness) <- NULL
+missingness <- missingness %>%
+  mutate(
+    Cannulated_Pct = round(Cannulated_Missing / Cannulated_Total * 100, 1),
+    NotCannulated_Pct = round(NotCannulated_Missing / NotCannulated_Total * 100, 1)
+  ) %>%
+  select(Variable, Cannulated_Missing, Cannulated_Pct, NotCannulated_Missing, NotCannulated_Pct)
+
+library(kableExtra)
+knitr::kable(missingness,
+             col.names = c("Variable", "Missing (n)", "Missing (%)", "Missing (n)", "Missing (%)")) %>%
+  add_header_above(c(" " = 1, "Cannulated" = 2, "Not Cannulated" = 2))
+```

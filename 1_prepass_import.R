@@ -86,7 +86,7 @@ data <- data2_raw %>%
     sex = as.integer(sex),
     race = as.integer(race),
     bmi = as.numeric(bmi),
-    init_rhythm = parse_int_robust(init_rhythm),
+    # init_rhythm kept as character (categorical variable)
     witnessed = parse_binary(witnessed),
     ecmo_yn = parse_binary(ecmo_yn),
     bystander_cpr = parse_binary(bystander_cpr),
