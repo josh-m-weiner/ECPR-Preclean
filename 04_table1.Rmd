@@ -226,7 +226,7 @@ table1 <- data.frame(
     format_pval(compare_binary(table_data$field_intubation, table_data$ecmo_yn)),
     format_pval(compare_continuous(cannulated$n_shocks, not_cannulated$n_shocks)),
     format_pval(compare_continuous(cannulated$lactate, not_cannulated$lactate)),
-    format_pval(compare_continuous(cannulated$ph, not_cannulated$ph)),
+    "--",  # pH: insufficient sample size in not cannulated group
     format_pval(compare_continuous(cannulated$low_flow_time, not_cannulated$low_flow_time)),
     "--",
     format_pval(compare_continuous(cannulated$los_days, not_cannulated$los_days)),
