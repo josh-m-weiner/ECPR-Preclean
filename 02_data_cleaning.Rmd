@@ -1,0 +1,96 @@
+---
+title: "ECPR Data Cleaning Pipeline"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Introduction
+
+This document executes and documents the data cleaning pipeline for the matched ECPR dataset.
+
+## Data Import and Cleaning
+
+```{r import, results=FALSE}
+source("0_importfunctions.R")
+source("1_prepass_import.R")
+```
+
+## Cleaning Steps
+
+### 1. Import as Text
+
+All columns are initially read as character type (`col_types = "text"`) to prevent `{readxl}` from making premature type inferences. This is critical when source data contains mixed encodings within columns (e.g., dates stored as both "2023-01-15" and "01-15-2023" in the same field).
+
+### 2. Rename variables
+
+Original column names (often verbose with embedded coding schemes like "M=1, F=2") are preserved as variable labels via the `{labelled}`. Variables are assigned short names in snake_case (e.g., `sex`, `arrest_date`, `bystander_cpr`).
+
+### 3. Type Parsing with Robust Functions
+
+Custom parsing functions handle the heterogeneous encodings present in the source data:
+
+-   **Binary variables** (`witnessed`, `bystander_cpr`, `lucas`, `field_intubation`): Parsed using `parse_binary()` which recognizes "yes/no", "y/n", "true/false", and "1/0" patterns (case-insensitive).
+
+-   **Integers with embedded text** (`init_rhythm`): Parsed using `parse_int_robust()` which extracts the first integer from strings containing mixed content.
+
+-   **Numerics with embedded text** (`hems_scene_time`, `ecmo_time`, `lactate`, `ph`): Parsed using `parse_num_robust()` which extracts decimal values from strings.
+
+-   **Dates** (`arrest_date`): Parsed using `parse_mixed_date()` which handles:
+
+    -   Excel serial dates (days since 1899-12-30)
+    -   ISO format (YYYY-MM-DD)
+    -   US format (MM-DD-YYYY, MM/DD/YYYY)
+
+-   **Datetimes** (`call_911_dt`, `ems_enroute_dt`, `ems_scene_dt`, `ems_depart_dt`, `ems_hospital_dt`): Parsed using `parse_mixed_datetime()` with the same format flexibility plus time components.
+
+-   **Time-only fields** (`ohca_time`, `hems_request`, `hems_enroute`, `hems_scene`, `hems_depart`): Parsed using `parse_mixed_time()` which handles:
+
+    -   Excel decimal fractions of day (0.5 = 12:00:00, 0.84 = \~20:10)
+    -   HH:MM:SS and HH:MM string formats
+    -   Returned as `hms` objects
+
+### 4. Remove blank columns
+
+Columns with complete missingness are identified and removed from the analytic dataset.
+
+**Removed columns:** `r if(length(null_cols_100) > 0) paste(null_cols_100, collapse = ", ") else "None"`
+
+### 5. Flag high-missingness columns
+
+Columns with 85-99% missing values are flagged but retained. These may still be informative for subset analyses but should be used with caution.
+
+**High-missingness columns (85-99%):** `r if(length(null_cols_85) > 0) paste(null_cols_85, collapse = ", ") else "None"`
+
+## Missingness Summary
+
+```{r missingness}
+knitr::kable(missing_summary, col.names = c("Variable", "% Missing"))
+```
+
+## Final Dataset Structure
+
+```{r structure}
+cat("Dimensions:", nrow(data), "observations x", ncol(data), "variables\n\n")
+
+# Variable types summary
+type_summary <- data.frame(
+  type = sapply(data, function(x) class(x)[1])
+) %>%
+  count(type) %>%
+  arrange(desc(n))
+
+knitr::kable(type_summary, col.names = c("Type", "Count"))
+```
+
+## Objects Created
+
+-   `data`: Cleaned analytic dataset
+-   `data2_raw`: Pre-cleaning dataset (all character types, with labels)
+-   `missing_summary`: Data frame of per-variable missingness percentages
+
+### Saved Output
+
+The cleaned dataset is saved to `clean_data/data.RData`.

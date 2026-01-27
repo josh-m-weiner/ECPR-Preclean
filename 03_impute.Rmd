@@ -1,0 +1,236 @@
+---
+title: "ECPR Data Imputation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, error=FALSE, warning = FALSE)
+```
+
+## Introduction
+
+This document performs imputation for select variables in the cleaned ECPR dataset.
+
+## Load Data
+
+```{r load_data}
+library(tidyverse)
+library(lubridate)
+
+load("clean_data/data.RData")
+
+cat("Loaded data:", nrow(data), "rows x", ncol(data), "columns\n")
+```
+
+## Imputation Rules
+
+1. **n_shocks**: Impute 0 when NULL
+2. **field_intubation**: Impute 0 when NULL
+3. **lucas**: Impute 0 when NULL
+4. **call_911_dt**: Impute as (hems_request - 11 minutes) when call_911_dt is NULL and hems_request is not NULL. If both are NULL, leave as NULL. Do not modify existing non-NULL values.
+
+## Pre-Imputation Summary
+
+```{r pre_imputation_summary}
+cat("=== Pre-Imputation Missing Values ===\n\n")
+cat("n_shocks:         ", sum(is.na(data$n_shocks)), "missing\n")
+cat("field_intubation: ", sum(is.na(data$field_intubation)), "missing\n")
+cat("lucas:            ", sum(is.na(data$lucas)), "missing\n")
+cat("call_911_dt:      ", sum(is.na(data$call_911_dt)), "missing\n")
+cat("hems_request:     ", sum(is.na(data$hems_request)), "missing\n")
+```
+
+## Perform Imputation
+
+```{r imputation}
+# Count how many call_911_dt values will be imputed from hems_request
+n_call_911_imputed <- sum(is.na(data$call_911_dt) & !is.na(data$hems_request))
+
+data_imp <- data %>%
+  mutate(
+    # Impute 0 for n_shocks, field_intubation, and lucas when NULL
+    n_shocks = if_else(is.na(n_shocks), 0, n_shocks),
+    field_intubation = if_else(is.na(field_intubation), 0L, field_intubation),
+    lucas = if_else(is.na(lucas), 0L, lucas),
+
+    # Impute call_911_dt as hems_request - 11 minutes when:
+    #   - call_911_dt is NULL
+    #   - hems_request is NOT NULL
+    # Uses arrest_date combined with hems_request time
+    call_911_dt = if_else(
+      is.na(call_911_dt) & !is.na(hems_request),
+      # Combine arrest_date with hems_request time, then subtract 11 minutes
+      as.POSIXct(paste(arrest_date, hems_request), tz = "UTC") - minutes(11),
+      call_911_dt
+    )
+  )
+
+cat("call_911_dt values imputed from (hems_request - 11 min):", n_call_911_imputed, "\n")
+```
+
+## Post-Imputation Summary
+
+```{r post_imputation_summary}
+cat("=== Post-Imputation Missing Values ===\n\n")
+cat("n_shocks:         ", sum(is.na(data_imp$n_shocks)), "missing\n")
+cat("field_intubation: ", sum(is.na(data_imp$field_intubation)), "missing\n")
+cat("lucas:            ", sum(is.na(data_imp$lucas)), "missing\n")
+cat("call_911_dt:      ", sum(is.na(data_imp$call_911_dt)), "missing\n")
+```
+
+## Missing call_911_dt After Imputation
+
+The following tables show the number of rows where `call_911_dt` remains NULL after imputation.
+
+### By Cohort
+
+```{r call_911_missing_by_cohort}
+missing_by_cohort <- data_imp %>%
+  group_by(cohort) %>%
+  summarise(
+    total_rows = n(),
+    call_911_dt_missing = sum(is.na(call_911_dt)),
+    pct_missing = round(call_911_dt_missing / total_rows * 100, 1)
+  )
+
+knitr::kable(missing_by_cohort,
+             col.names = c("Cohort", "Total Rows", "call_911_dt Missing", "% Missing"))
+```
+
+### By ECMO Status (ecmo_yn)
+
+```{r call_911_missing_by_ecmo}
+missing_by_ecmo <- data_imp %>%
+  mutate(ecmo_yn_label = case_when(
+    ecmo_yn == 1 ~ "Yes",
+    ecmo_yn == 0 ~ "No",
+    TRUE ~ "Unknown"
+  )) %>%
+  group_by(ecmo_yn_label) %>%
+  summarise(
+    total_rows = n(),
+    call_911_dt_missing = sum(is.na(call_911_dt)),
+    pct_missing = round(call_911_dt_missing / total_rows * 100, 1)
+  )
+
+knitr::kable(missing_by_ecmo,
+             col.names = c("ECMO Initiated", "Total Rows", "call_911_dt Missing", "% Missing"))
+```
+
+### Cross-tabulation: Cohort x ECMO Status
+
+```{r call_911_missing_crosstab}
+missing_crosstab <- data_imp %>%
+  mutate(ecmo_yn_label = case_when(
+    ecmo_yn == 1 ~ "ECMO: Yes",
+    ecmo_yn == 0 ~ "ECMO: No",
+    TRUE ~ "ECMO: Unknown"
+  )) %>%
+  group_by(cohort, ecmo_yn_label) %>%
+  summarise(
+    total_rows = n(),
+    call_911_dt_missing = sum(is.na(call_911_dt)),
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    names_from = ecmo_yn_label,
+    values_from = c(total_rows, call_911_dt_missing),
+    values_fill = 0
+  )
+
+knitr::kable(missing_crosstab)
+```
+
+## EMS Hospital Arrival Time Imputation
+
+### Validation Check
+
+First, let's check the relationship between `ems_hospital_dt`, `hems_depart`, and `hems_flight_time` for rows where all three values are present.
+
+```{r ems_hospital_validation}
+# Check rows where all three fields are NOT missing
+validation_data <- data_imp %>%
+  filter(!is.na(ems_hospital_dt) & !is.na(hems_depart) & !is.na(hems_flight_time))
+
+cat("Rows where all three fields (ems_hospital_dt, hems_depart, hems_flight_time) are present:",
+    nrow(validation_data), "\n\n")
+
+if (nrow(validation_data) > 0) {
+  # Calculate the difference between ems_hospital_dt and hems_depart in minutes
+  # and compare to hems_flight_time
+  validation_check <- validation_data %>%
+    mutate(
+      # Create datetime for hems_depart using arrest_date
+      hems_depart_dt = as.POSIXct(paste(arrest_date, hems_depart), tz = "UTC"),
+      # Calculate actual difference in minutes
+      actual_diff_minutes = as.numeric(difftime(ems_hospital_dt, hems_depart_dt, units = "mins")),
+      # Compare to listed flight time
+      flight_time_diff = actual_diff_minutes - hems_flight_time
+    ) %>%
+    select(record_id, ems_hospital_dt, hems_depart, hems_depart_dt, hems_flight_time,
+           actual_diff_minutes, flight_time_diff)
+
+  cat("=== Validation Summary ===\n")
+  cat("Mean difference (actual - listed flight time):",
+      round(mean(validation_check$flight_time_diff, na.rm = TRUE), 2), "minutes\n")
+  cat("Median difference:",
+      round(median(validation_check$flight_time_diff, na.rm = TRUE), 2), "minutes\n")
+  cat("SD of difference:",
+      round(sd(validation_check$flight_time_diff, na.rm = TRUE), 2), "minutes\n")
+  cat("Range:", round(min(validation_check$flight_time_diff, na.rm = TRUE), 2), "to",
+      round(max(validation_check$flight_time_diff, na.rm = TRUE), 2), "minutes\n\n")
+
+  # Show detailed table
+  cat("=== Detailed Comparison ===\n")
+  knitr::kable(validation_check,
+               col.names = c("Record ID", "ems_hospital_dt", "hems_depart", "hems_depart_dt",
+                            "hems_flight_time (min)", "Actual Diff (min)", "Difference"))
+} else {
+  cat("No rows found with all three fields present for validation.\n")
+}
+```
+
+### Pre-Imputation Status
+
+```{r ems_hospital_pre_imputation}
+cat("=== ems_hospital_dt Pre-Imputation Status ===\n\n")
+cat("ems_hospital_dt missing:", sum(is.na(data_imp$ems_hospital_dt)), "\n")
+cat("hems_depart missing:", sum(is.na(data_imp$hems_depart)), "\n")
+cat("hems_flight_time missing:", sum(is.na(data_imp$hems_flight_time)), "\n\n")
+
+# Count candidates for imputation
+n_ems_impute_candidates <- sum(
+  is.na(data_imp$ems_hospital_dt) &
+  !is.na(data_imp$hems_depart) &
+  !is.na(data_imp$hems_flight_time)
+)
+cat("Rows where ems_hospital_dt is missing but hems_depart AND hems_flight_time are present:",
+    n_ems_impute_candidates, "\n")
+```
+
+### Perform ems_hospital_dt Imputation
+
+```{r ems_hospital_imputation}
+data_imp <- data_imp %>%
+  mutate(
+    # Impute ems_hospital_dt when:
+    #   - ems_hospital_dt IS missing
+    #   - hems_depart is NOT missing
+    #   - hems_flight_time is NOT missing
+    # Formula: ems_hospital_dt = hems_depart + hems_flight_time
+    ems_hospital_dt = if_else(
+      is.na(ems_hospital_dt) & !is.na(hems_depart) & !is.na(hems_flight_time),
+      as.POSIXct(paste(arrest_date, hems_depart), tz = "UTC") + minutes(hems_flight_time),
+      ems_hospital_dt
+    )
+  )
+
+cat("ems_hospital_dt values imputed:", n_ems_impute_candidates, "\n")
+cat("ems_hospital_dt still missing after imputation:", sum(is.na(data_imp$ems_hospital_dt)), "\n")
+```
+
+## Save Imputed Data
+
+```{r save_data}
+save(data_imp, file = "clean_data/data_imputed.RData")
+```
