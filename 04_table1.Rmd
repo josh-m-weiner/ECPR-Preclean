@@ -39,6 +39,59 @@ n_pct <- function(x, condition = 1) {
 n_count <- function(x) {
   sum(!is.na(x))
 }
+
+# Format p-value
+format_pval <- function(p) {
+  if (is.na(p)) return("--")
+  if (p < 0.001) return("<0.001")
+  sprintf("%.3f", p)
+}
+
+# Compare continuous variables (t-test or Wilcoxon based on normality)
+compare_continuous <- function(x1, x2) {
+  x1 <- x1[!is.na(x1)]
+  x2 <- x2[!is.na(x2)]
+  if (length(x1) < 3 || length(x2) < 3) return(NA)
+
+  # Check normality with Shapiro-Wilk (use smaller sample if n > 5000)
+  norm1 <- tryCatch(shapiro.test(head(x1, 5000))$p.value, error = function(e) 0)
+  norm2 <- tryCatch(shapiro.test(head(x2, 5000))$p.value, error = function(e) 0)
+
+  if (norm1 > 0.05 && norm2 > 0.05) {
+    # Both normal: use t-test
+    tryCatch(t.test(x1, x2)$p.value, error = function(e) NA)
+  } else {
+    # Non-normal: use Wilcoxon rank-sum
+    tryCatch(wilcox.test(x1, x2)$p.value, error = function(e) NA)
+  }
+}
+
+# Compare categorical variables (Chi-square or Fisher's exact)
+compare_categorical <- function(var, group) {
+  tbl <- table(var, group, useNA = "no")
+  if (nrow(tbl) < 2 || ncol(tbl) < 2) return(NA)
+
+  # Use Fisher's exact if any expected count < 5
+expected <- chisq.test(tbl)$expected
+  if (any(expected < 5)) {
+    tryCatch(fisher.test(tbl, simulate.p.value = TRUE)$p.value, error = function(e) NA)
+  } else {
+    tryCatch(chisq.test(tbl)$p.value, error = function(e) NA)
+  }
+}
+
+# Compare binary variables
+compare_binary <- function(x, group) {
+  tbl <- table(x, group, useNA = "no")
+  if (nrow(tbl) < 2 || ncol(tbl) < 2) return(NA)
+
+  expected <- chisq.test(tbl)$expected
+  if (any(expected < 5)) {
+    tryCatch(fisher.test(tbl)$p.value, error = function(e) NA)
+  } else {
+    tryCatch(chisq.test(tbl)$p.value, error = function(e) NA)
+  }
+}
 ```
 
 ## Calculate Statistics by ECMO Status
@@ -78,6 +131,31 @@ table1 <- data.frame(
     "Days on V-A ECMO, mean (SD)",
     "Hospital LOS (days), mean (SD)",
     "Alive at discharge, n (%)"
+  ),
+
+  All_Patients = c(
+    nrow(table_data),
+    mean_sd(table_data$age),
+    n_pct(table_data$sex, 1),
+    n_pct(table_data$race, 1),
+    n_pct(table_data$race, 2),
+    mean_sd(table_data$call_to_cann_hosp_time),
+    mean_sd(table_data$hems_launch_time),
+    mean_sd(table_data$hems_scene_time),
+    mean_sd(table_data$hems_flight_time),
+    mean_sd(table_data$ecmo_time),
+    n_pct(table_data$init_rhythm, "VT/VF"),
+    n_pct(table_data$witnessed, 1),
+    n_pct(table_data$bystander_cpr, 1),
+    n_pct(table_data$lucas, 1),
+    n_pct(table_data$field_intubation, 1),
+    mean_sd(table_data$n_shocks),
+    mean_sd(table_data$lactate),
+    mean_sd(table_data$ph),
+    mean_sd(table_data$low_flow_time),
+    mean_sd(table_data$ecmo_days),
+    mean_sd(table_data$los_days),
+    n_pct(table_data$alive, 1)
   ),
 
   Cannulated = c(
@@ -128,11 +206,38 @@ table1 <- data.frame(
     "N/A",
     mean_sd(not_cannulated$los_days),
     n_pct(not_cannulated$alive, 1)
+  ),
+
+  P_Value = c(
+    "--",
+    format_pval(compare_continuous(cannulated$age, not_cannulated$age)),
+    format_pval(compare_binary(table_data$sex, table_data$ecmo_yn)),
+    format_pval(compare_binary(table_data$race == 1, table_data$ecmo_yn)),
+    format_pval(compare_binary(table_data$race == 2, table_data$ecmo_yn)),
+    format_pval(compare_continuous(cannulated$call_to_cann_hosp_time, not_cannulated$call_to_cann_hosp_time)),
+    format_pval(compare_continuous(cannulated$hems_launch_time, not_cannulated$hems_launch_time)),
+    format_pval(compare_continuous(cannulated$hems_scene_time, not_cannulated$hems_scene_time)),
+    format_pval(compare_continuous(cannulated$hems_flight_time, not_cannulated$hems_flight_time)),
+    "--",
+    format_pval(compare_binary(table_data$init_rhythm == "VT/VF", table_data$ecmo_yn)),
+    format_pval(compare_binary(table_data$witnessed, table_data$ecmo_yn)),
+    format_pval(compare_binary(table_data$bystander_cpr, table_data$ecmo_yn)),
+    format_pval(compare_binary(table_data$lucas, table_data$ecmo_yn)),
+    format_pval(compare_binary(table_data$field_intubation, table_data$ecmo_yn)),
+    format_pval(compare_continuous(cannulated$n_shocks, not_cannulated$n_shocks)),
+    format_pval(compare_continuous(cannulated$lactate, not_cannulated$lactate)),
+    format_pval(compare_continuous(cannulated$ph, not_cannulated$ph)),
+    format_pval(compare_continuous(cannulated$low_flow_time, not_cannulated$low_flow_time)),
+    "--",
+    format_pval(compare_continuous(cannulated$los_days, not_cannulated$los_days)),
+    format_pval(compare_binary(table_data$alive, table_data$ecmo_yn))
   )
 )
 
-knitr::kable(table1, col.names = c("Variable", "Patients Cannulated for ECPR", "Patients Not Cannulated for ECPR"))
+knitr::kable(table1, col.names = c("Variable", "All Patients", "Patients Cannulated for ECPR", "Patients Not Cannulated for ECPR", "P-Value"))
 ```
+
+*Continuous variables compared using independent samples t-test (normally distributed) or Wilcoxon rank-sum test (non-normally distributed). Categorical variables compared using Chi-square test or Fisher's exact test when expected cell counts < 5. Normality assessed via Shapiro-Wilk test.*
 
 ## Missingness Summary
 

@@ -14,8 +14,8 @@ This document executes and documents the data cleaning pipeline for the matched 
 ## Data Import and Cleaning
 
 ```{r import, results=FALSE}
-source("0_importfunctions.R")
-source("1_prepass_import.R")
+source("00_importfunctions.R")
+source("01_prepass_import.R")
 ```
 
 ## Cleaning Steps
