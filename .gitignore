@@ -7,3 +7,5 @@
 /.claude
 *.html
 *.pdf
+/paper_data
+val.csv
