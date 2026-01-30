@@ -66,31 +66,18 @@ compare_continuous <- function(x1, x2) {
   }
 }
 
-# Compare categorical variables (Chi-square or Fisher's exact)
+# Compare categorical variables (Fisher's exact test for all comparisons)
 compare_categorical <- function(var, group) {
   tbl <- table(var, group, useNA = "no")
   if (nrow(tbl) < 2 || ncol(tbl) < 2) return(NA)
-
-  # Use Fisher's exact if any expected count < 5
-expected <- chisq.test(tbl)$expected
-  if (any(expected < 5)) {
-    tryCatch(fisher.test(tbl, simulate.p.value = TRUE)$p.value, error = function(e) NA)
-  } else {
-    tryCatch(chisq.test(tbl)$p.value, error = function(e) NA)
-  }
+  tryCatch(fisher.test(tbl)$p.value, error = function(e) NA)
 }
 
-# Compare binary variables
+# Compare binary variables (Fisher's exact test for all comparisons)
 compare_binary <- function(x, group) {
   tbl <- table(x, group, useNA = "no")
   if (nrow(tbl) < 2 || ncol(tbl) < 2) return(NA)
-
-  expected <- chisq.test(tbl)$expected
-  if (any(expected < 5)) {
-    tryCatch(fisher.test(tbl)$p.value, error = function(e) NA)
-  } else {
-    tryCatch(chisq.test(tbl)$p.value, error = function(e) NA)
-  }
+  tryCatch(fisher.test(tbl)$p.value, error = function(e) NA)
 }
 ```
 
@@ -237,7 +224,7 @@ table1 <- data.frame(
 knitr::kable(table1, col.names = c("Variable", "All Patients", "Patients Cannulated for ECPR", "Patients Not Cannulated for ECPR", "P-Value"))
 ```
 
-*Continuous variables compared using independent samples t-test (normally distributed) or Wilcoxon rank-sum test (non-normally distributed). Categorical variables compared using Chi-square test or Fisher's exact test when expected cell counts < 5. Normality assessed via Shapiro-Wilk test.*
+*Continuous variables compared using independent samples t-test (normally distributed) or Wilcoxon rank-sum test (non-normally distributed). Categorical variables compared using Fisher's exact test. Normality assessed via Shapiro-Wilk test.*
 
 ## Missingness Summary
 
