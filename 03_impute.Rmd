@@ -57,10 +57,10 @@ data_imp <- data %>%
     #   - call_911_dt is NULL
     #   - hems_request is NOT NULL
     # Uses arrest_date combined with hems_request time
+    # Note: format() is required to strip microseconds from hms objects for proper parsing
     call_911_dt = if_else(
       is.na(call_911_dt) & !is.na(hems_request),
-      # Combine arrest_date with hems_request time, then subtract 11 minutes
-      as.POSIXct(paste(arrest_date, hems_request), tz = "UTC") - minutes(11),
+      ymd_hms(paste(arrest_date, format(hems_request, "%H:%M:%S")), tz = "UTC") - minutes(11),
       call_911_dt
     )
   )
@@ -161,7 +161,8 @@ if (nrow(validation_data) > 0) {
   validation_check <- validation_data %>%
     mutate(
       # Create datetime for hems_depart using arrest_date
-      hems_depart_dt = as.POSIXct(paste(arrest_date, hems_depart), tz = "UTC"),
+      # Note: format() strips microseconds from hms for proper parsing
+      hems_depart_dt = ymd_hms(paste(arrest_date, format(hems_depart, "%H:%M:%S")), tz = "UTC"),
       # Calculate actual difference in minutes
       actual_diff_minutes = as.numeric(difftime(ems_hospital_dt, hems_depart_dt, units = "mins")),
       # Compare to listed flight time
@@ -232,9 +233,10 @@ data_imp <- data_imp %>%
     #   - hems_depart is NOT missing
     #   - hems_flight_time is NOT missing
     # Formula: ems_hospital_dt = hems_depart + hems_flight_time
+    # Note: format() strips microseconds from hms for proper parsing
     ems_hospital_dt = if_else(
       is.na(ems_hospital_dt) & !is.na(hems_depart) & !is.na(hems_flight_time),
-      as.POSIXct(paste(arrest_date, hems_depart), tz = "UTC") + minutes(hems_flight_time),
+      ymd_hms(paste(arrest_date, format(hems_depart, "%H:%M:%S")), tz = "UTC") + minutes(hems_flight_time),
       ems_hospital_dt
     )
   )
