@@ -74,6 +74,25 @@ names(data2_raw) <- new_names
 var_label(data2_raw) <- setNames(as.list(original_names), new_names)
 
 # ==============================================================================
+# Pre-process: combine time-only call_911_dt with arrest_date
+# Some rows store call_911_dt as a time-only Excel decimal (0 to <1) rather
+# than a full serial datetime. Add arrest_date to create a parseable value.
+# ==============================================================================
+
+data2_raw <- data2_raw %>%
+  mutate(
+    call_911_dt = {
+      time_val <- suppressWarnings(as.numeric(call_911_dt))
+      date_val <- suppressWarnings(as.numeric(arrest_date))
+      ifelse(
+        !is.na(time_val) & time_val >= 0 & time_val < 1 & !is.na(date_val),
+        as.character(date_val + time_val),
+        call_911_dt
+      )
+    }
+  )
+
+# ==============================================================================
 # Apply type parsing
 # ==============================================================================
 

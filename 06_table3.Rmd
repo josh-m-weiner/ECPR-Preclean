@@ -1,5 +1,5 @@
 ---
-title: "Table 2: Matched Comparison of Patients Undergoing ECPR Cannulation"
+title: "Table 3: Matched Comparison of Patients Undergoing ECPR Cannulation in ECMO Truck vs. MMRC Standard"
 output: html_document
 ---
 
@@ -13,21 +13,21 @@ library(tidyverse)
 
 load("clean_data/data_imputed.RData")
 
-# MMRC FLIGHT-ECPR Protocol: RV and nRV cohorts, cannulated only
-flight_ecpr <- data_imp %>%
-  filter(cohort %in% c("RV", "nRV"), ecmo_yn == 1)
+# ECMO Truck Protocol: truck cohort, cannulated only
+truck_ecpr <- data_imp %>%
+  filter(cohort == "TR", ecmo_yn == 1)
 
-# Standard MMRC ECPR Protocol: LFMC cohort, cannulated only
+# Standard MMRC ECPR Protocol: trlfmc cohort, cannulated only
 standard_ecpr <- data_imp %>%
-  filter(cohort == "LFMC", ecmo_yn == 1)
+  filter(cohort == "trlfmc", ecmo_yn == 1)
 
 # Combined for statistical tests
 table_data <- data_imp %>%
-  filter(ecmo_yn == 1) %>%
-  mutate(protocol = if_else(cohort %in% c("RV", "nRV"), "FLIGHT", "Standard"))
+  filter(cohort %in% c("truck", "trlfmc"), ecmo_yn == 1) %>%
+  mutate(protocol = if_else(cohort == "truck", "Truck", "Standard"))
 
-cat("FLIGHT-ECPR patients:", nrow(flight_ecpr), "\n")
-cat("Standard ECPR patients:", nrow(standard_ecpr), "\n")
+cat("ECMO Truck Protocol patients:", nrow(truck_ecpr), "\n")
+cat("Standard MMRC ECPR Protocol patients:", nrow(standard_ecpr), "\n")
 ```
 
 ```{r helper_functions, echo=FALSE}
@@ -91,11 +91,11 @@ compare_binary <- function(x, group) {
 }
 ```
 
-## Table 2
+## Table 3
 
-```{r table2}
+```{r table3}
 # Build table data frame
-table2 <- data.frame(
+table3 <- data.frame(
   Variable = c(
     "Total Number",
     "",
@@ -107,9 +107,7 @@ table2 <- data.frame(
     "",
     "Time Intervals",
     "9-1-1 call to ECMO cannulation hospital arrival time (min), mean (SD)",
-    "HEMS launch time (min), mean (SD)",
-    "HEMS scene time (min), mean (SD)",
-    "HEMS flight time (min), mean (SD)",
+    "Low flow time (min), mean (SD)",
     "Needle stick to ECMO time (min), mean (SD)",
     "",
     "Cardiac Arrest Characteristics",
@@ -121,7 +119,6 @@ table2 <- data.frame(
     "Number of shocks, mean (SD)",
     "Lactate, mean (SD)",
     "pH, mean (SD)",
-    "Low flow time (min), mean (SD)",
     "",
     "Outcomes",
     "Days on V-A ECMO, mean (SD)",
@@ -129,37 +126,34 @@ table2 <- data.frame(
     "Survival to discharge, n (%)"
   ),
 
-  FLIGHT_ECPR = c(
-    nrow(flight_ecpr),
+  Truck_ECPR = c(
+    nrow(truck_ecpr),
     "",
     "",
-    mean_sd(flight_ecpr$age),
-    n_pct(flight_ecpr$sex, 1),
-    n_pct(flight_ecpr$race, 1),
-    n_pct(flight_ecpr$race, 2),
+    mean_sd(truck_ecpr$age),
+    n_pct(truck_ecpr$sex, 1),
+    n_pct(truck_ecpr$race, 1),
+    n_pct(truck_ecpr$race, 2),
     "",
     "",
-    mean_sd(flight_ecpr$call_to_cann_hosp_time),
-    mean_sd(flight_ecpr$hems_launch_time),
-    mean_sd(flight_ecpr$hems_scene_time),
-    mean_sd(flight_ecpr$hems_flight_time),
-    mean_sd(flight_ecpr$ecmo_time),
+    mean_sd(truck_ecpr$call_to_cann_hosp_time),
+    mean_sd(truck_ecpr$low_flow_time),
+    mean_sd(truck_ecpr$ecmo_time),
     "",
     "",
-    n_pct(flight_ecpr$init_rhythm, "VT/VF"),
-    n_pct(flight_ecpr$witnessed, 1),
-    n_pct(flight_ecpr$bystander_cpr, 1),
-    n_pct(flight_ecpr$lucas, 1),
-    n_pct(flight_ecpr$field_intubation, 1),
-    mean_sd(flight_ecpr$n_shocks),
-    mean_sd(flight_ecpr$lactate),
-    mean_sd(flight_ecpr$ph),
-    mean_sd(flight_ecpr$low_flow_time),
+    n_pct(truck_ecpr$init_rhythm, "VT/VF"),
+    n_pct(truck_ecpr$witnessed, 1),
+    n_pct(truck_ecpr$bystander_cpr, 1),
+    n_pct(truck_ecpr$lucas, 1),
+    n_pct(truck_ecpr$field_intubation, 1),
+    mean_sd(truck_ecpr$n_shocks),
+    mean_sd(truck_ecpr$lactate),
+    mean_sd(truck_ecpr$ph),
     "",
     "",
-    mean_sd(flight_ecpr$ecmo_days),
-    mean_sd(flight_ecpr$los_days),
-    n_pct(flight_ecpr$alive, 1)
+    mean_sd(truck_ecpr$ecmo_days),
+    mean_sd(truck_ecpr$los_days),
+    n_pct(truck_ecpr$alive, 1)
   ),
 
   Standard_ECPR = c(
@@ -172,10 +166,8 @@ table2 <- data.frame(
     n_pct(standard_ecpr$race, 2),
     "",
     "",
-    "N/A",
-    "N/A",
-    "N/A",
-    "N/A",
+    mean_sd(standard_ecpr$call_to_cann_hosp_time),
+    mean_sd(standard_ecpr$low_flow_time),
     mean_sd(standard_ecpr$ecmo_time),
     "",
     "",
@@ -187,7 +179,6 @@ table2 <- data.frame(
     mean_sd(standard_ecpr$n_shocks),
     mean_sd(standard_ecpr$lactate),
     mean_sd(standard_ecpr$ph),
-    mean_sd(standard_ecpr$low_flow_time),
     "",
     "",
     mean_sd(standard_ecpr$ecmo_days),
@@ -199,17 +190,15 @@ table2 <- data.frame(
     "--",
     "",
     "",
-    format_pval(compare_continuous(flight_ecpr$age, standard_ecpr$age)),
+    format_pval(compare_continuous(truck_ecpr$age, standard_ecpr$age)),
     format_pval(compare_binary(table_data$sex, table_data$protocol)),
     format_pval(compare_binary(table_data$race == 1, table_data$protocol)),
     format_pval(compare_binary(table_data$race == 2, table_data$protocol)),
     "",
     "",
-    "N/A",
-    "N/A",
-    "N/A",
-    "N/A",
-    format_pval(compare_continuous(flight_ecpr$ecmo_time, standard_ecpr$ecmo_time)),
+    format_pval(compare_continuous(truck_ecpr$call_to_cann_hosp_time, standard_ecpr$call_to_cann_hosp_time)),
+    format_pval(compare_continuous(truck_ecpr$low_flow_time, standard_ecpr$low_flow_time)),
+    format_pval(compare_continuous(truck_ecpr$ecmo_time, standard_ecpr$ecmo_time)),
     "",
     "",
     format_pval(compare_binary(table_data$init_rhythm == "VT/VF", table_data$protocol)),
@@ -217,38 +206,37 @@ table2 <- data.frame(
     format_pval(compare_binary(table_data$bystander_cpr, table_data$protocol)),
     format_pval(compare_binary(table_data$lucas, table_data$protocol)),
     format_pval(compare_binary(table_data$field_intubation, table_data$protocol)),
-    format_pval(compare_continuous(flight_ecpr$n_shocks, standard_ecpr$n_shocks)),
-    format_pval(compare_continuous(flight_ecpr$lactate, standard_ecpr$lactate)),
-    format_pval(compare_continuous(flight_ecpr$ph, standard_ecpr$ph)),
-    format_pval(compare_continuous(flight_ecpr$low_flow_time, standard_ecpr$low_flow_time)),
+    format_pval(compare_continuous(truck_ecpr$n_shocks, standard_ecpr$n_shocks)),
+    format_pval(compare_continuous(truck_ecpr$lactate, standard_ecpr$lactate)),
+    format_pval(compare_continuous(truck_ecpr$ph, standard_ecpr$ph)),
     "",
     "",
-    format_pval(compare_continuous(flight_ecpr$ecmo_days, standard_ecpr$ecmo_days)),
-    format_pval(compare_continuous(flight_ecpr$los_days, standard_ecpr$los_days)),
+    format_pval(compare_continuous(truck_ecpr$ecmo_days, standard_ecpr$ecmo_days)),
+    format_pval(compare_continuous(truck_ecpr$los_days, standard_ecpr$los_days)),
     format_pval(compare_binary(table_data$alive, table_data$protocol))
   )
 )
 
-knitr::kable(table2, col.names = c("Variable", "MMRC FLIGHT-ECPR Protocol", "Standard MMRC ECPR Protocol", "P-Value"))
+knitr::kable(table3, col.names = c("Variable", "ECMO Truck Protocol", "Standard MMRC ECPR Protocol", "P-Value"))
 ```
 
-*Continuous variables compared using independent samples t-test (normally distributed) or Wilcoxon rank-sum test (non-normally distributed). Categorical variables compared using Fisher's exact test. Normality assessed via Shapiro-Wilk test. HEMS = Helicopter Emergency Medical Services.*
+*Continuous variables compared using independent samples t-test (normally distributed) or Wilcoxon rank-sum test (non-normally distributed). Categorical variables compared using Fisher's exact test. Normality assessed via Shapiro-Wilk test.*
 
 ## Missingness Summary
 
 ```{r missingness, echo=FALSE}
 # Show missingness for key variables
-vars_of_interest <- c("age", "sex", "race", "call_to_cann_hosp_time", "hems_launch_time",
-                      "hems_scene_time", "hems_flight_time", "ecmo_time", "init_rhythm",
+vars_of_interest <- c("age", "sex", "race", "call_to_cann_hosp_time",
+                      "low_flow_time", "ecmo_time", "init_rhythm",
                       "witnessed", "bystander_cpr", "lucas", "field_intubation", "n_shocks",
-                      "lactate", "ph", "low_flow_time", "ecmo_days", "los_days", "alive")
+                      "lactate", "ph", "ecmo_days", "los_days", "alive")
 
 missingness <- data.frame(
   Variable = vars_of_interest,
-  FLIGHT_Missing = sapply(vars_of_interest, function(v) {
-    if (v %in% names(flight_ecpr)) sum(is.na(flight_ecpr[[v]])) else NA
+  Truck_Missing = sapply(vars_of_interest, function(v) {
+    if (v %in% names(truck_ecpr)) sum(is.na(truck_ecpr[[v]])) else NA
   }),
-  FLIGHT_Total = nrow(flight_ecpr),
+  Truck_Total = nrow(truck_ecpr),
   Standard_Missing = sapply(vars_of_interest, function(v) {
     if (v %in% names(standard_ecpr)) sum(is.na(standard_ecpr[[v]])) else NA
   }),
@@ -258,13 +246,13 @@ missingness <- data.frame(
 rownames(missingness) <- NULL
 missingness <- missingness %>%
   mutate(
-    FLIGHT_Pct = round(FLIGHT_Missing / FLIGHT_Total * 100, 1),
+    Truck_Pct = round(Truck_Missing / Truck_Total * 100, 1),
     Standard_Pct = round(Standard_Missing / Standard_Total * 100, 1)
   ) %>%
-  select(Variable, FLIGHT_Missing, FLIGHT_Pct, Standard_Missing, Standard_Pct)
+  select(Variable, Truck_Missing, Truck_Pct, Standard_Missing, Standard_Pct)
 
 library(kableExtra)
 knitr::kable(missingness,
              col.names = c("Variable", "Missing (n)", "Missing (%)", "Missing (n)", "Missing (%)")) %>%
-  add_header_above(c(" " = 1, "FLIGHT-ECPR" = 2, "Standard ECPR" = 2))
+  add_header_above(c(" " = 1, "ECMO Truck" = 2, "Standard ECPR" = 2))
 ```
