@@ -1,5 +1,5 @@
 ---
-title: "Table 3: Matched Comparison of Patients Undergoing ECPR Cannulation in ECMO Truck vs. MMRC Standard"
+title: "Paper #2, Table 1: Matched Comparison of Patients Undergoing ECPR Cannulation in ECMO Truck vs. MMRC Standard Protocol"
 output: html_document
 ---
 
@@ -23,8 +23,8 @@ standard_ecpr <- data_imp %>%
 
 # Combined for statistical tests
 table_data <- data_imp %>%
-  filter(cohort %in% c("truck", "trlfmc"), ecmo_yn == 1) %>%
-  mutate(protocol = if_else(cohort == "truck", "Truck", "Standard"))
+  filter(cohort %in% c("TR", "trlfmc"), ecmo_yn == 1) %>%
+  mutate(protocol = if_else(cohort == "TR", "Truck", "Standard"))
 
 cat("ECMO Truck Protocol patients:", nrow(truck_ecpr), "\n")
 cat("Standard MMRC ECPR Protocol patients:", nrow(standard_ecpr), "\n")
@@ -61,9 +61,10 @@ format_pval <- function(p) {
 compare_continuous <- function(x1, x2) {
   x1 <- x1[!is.na(x1)]
   x2 <- x2[!is.na(x2)]
-  if (length(x1) < 3 || length(x2) < 3) return(NA)
+  if (length(x1) < 2 || length(x2) < 2) return(NA)
 
-  # Check normality with Shapiro-Wilk (use smaller sample if n > 5000)
+  # Check normality with Shapiro-Wilk (needs n >= 3; default to t-test if too few)
+  if (length(x1) < 3 || length(x2) < 3) return(tryCatch(t.test(x1, x2)$p.value, error = function(e) NA))
   norm1 <- tryCatch(shapiro.test(head(x1, 5000))$p.value, error = function(e) 0)
   norm2 <- tryCatch(shapiro.test(head(x2, 5000))$p.value, error = function(e) 0)
 
@@ -71,8 +72,9 @@ compare_continuous <- function(x1, x2) {
     # Both normal: use t-test
     tryCatch(t.test(x1, x2)$p.value, error = function(e) NA)
   } else {
-    # Non-normal: use Wilcoxon rank-sum
-    tryCatch(wilcox.test(x1, x2)$p.value, error = function(e) NA)
+    # Non-normal: use Wilcoxon rank-sum, fall back to t-test on error
+    tryCatch(wilcox.test(x1, x2)$p.value,
+             error = function(e) tryCatch(t.test(x1, x2)$p.value, error = function(e) NA))
   }
 }
 
