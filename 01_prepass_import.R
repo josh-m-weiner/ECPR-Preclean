@@ -75,19 +75,7 @@ var_label(data2_raw) <- setNames(as.list(original_names), new_names)
 
 # ==============================================================================
 # Pre-process: combine time-only datetime fields with arrest_date
-# Some rows store datetime fields as time-only Excel decimals (0 to <1) rather
-# than full serial datetimes. Add arrest_date to create parseable values.
 # ==============================================================================
-
-fix_time_only <- function(dt_col, date_col) {
-  time_val <- suppressWarnings(as.numeric(dt_col))
-  date_val <- suppressWarnings(as.numeric(date_col))
-  ifelse(
-    !is.na(time_val) & time_val >= 0 & time_val < 1 & !is.na(date_val),
-    as.character(date_val + time_val),
-    dt_col
-  )
-}
 
 data2_raw <- data2_raw %>%
   mutate(

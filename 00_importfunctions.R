@@ -1,3 +1,7 @@
+# ##############################################################################
+#                     SECTION 1: IMPORT & PARSING FUNCTIONS
+# ##############################################################################
+
 # ==============================================================================
 # Parse binary/yes-no variables
 # ==============================================================================
@@ -195,4 +199,106 @@ parse_mixed_time <- function(x) {
   }
 
   hms::hms(seconds = seconds)
+}
+
+# ==============================================================================
+# Fix time-only Excel decimals by combining with arrest_date
+# Some rows store datetime fields as time-only Excel decimals (0 to <1) rather
+# than full serial datetimes. Add arrest_date to create parseable values.
+# ==============================================================================
+
+fix_time_only <- function(dt_col, date_col) {
+  time_val <- suppressWarnings(as.numeric(dt_col))
+  date_val <- suppressWarnings(as.numeric(date_col))
+  ifelse(
+    !is.na(time_val) & time_val >= 0 & time_val < 1 & !is.na(date_val),
+    as.character(date_val + time_val),
+    dt_col
+  )
+}
+
+# ##############################################################################
+#                  SECTION 2: DATA ANALYSIS & STATISTICAL TESTS
+# ##############################################################################
+
+# ==============================================================================
+# Format mean (SD)
+# ==============================================================================
+
+mean_sd <- function(x) {
+  if (all(is.na(x))) return("--")
+  sprintf("%.1f (%.1f)", mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
+}
+
+# ==============================================================================
+# Format n (%)
+# ==============================================================================
+
+n_pct <- function(x, condition = 1) {
+  n <- sum(x == condition, na.rm = TRUE)
+  total <- sum(!is.na(x))
+  if (total == 0) return("--")
+  sprintf("%d (%.1f%%)", n, n / total * 100)
+}
+
+# ==============================================================================
+# Format count
+# ==============================================================================
+
+n_count <- function(x) {
+  sum(!is.na(x))
+}
+
+# ==============================================================================
+# Format p-value
+# ==============================================================================
+
+format_pval <- function(p) {
+  if (is.na(p)) return("--")
+  if (p < 0.001) return("<0.001")
+  sprintf("%.3f", p)
+}
+
+# ==============================================================================
+# Compare continuous variables (t-test or Wilcoxon based on normality)
+# ==============================================================================
+
+compare_continuous <- function(x1, x2) {
+  x1 <- x1[!is.na(x1)]
+  x2 <- x2[!is.na(x2)]
+  if (length(x1) < 2 || length(x2) < 2) return(NA)
+
+  # Check normality with Shapiro-Wilk (needs n >= 3; default to t-test if too few)
+  if (length(x1) < 3 || length(x2) < 3) return(tryCatch(t.test(x1, x2)$p.value, error = function(e) NA))
+  norm1 <- tryCatch(shapiro.test(head(x1, 5000))$p.value, error = function(e) 0)
+  norm2 <- tryCatch(shapiro.test(head(x2, 5000))$p.value, error = function(e) 0)
+
+  if (norm1 > 0.05 && norm2 > 0.05) {
+    # Both normal: use t-test
+    tryCatch(t.test(x1, x2)$p.value, error = function(e) NA)
+  } else {
+    # Non-normal: use Wilcoxon rank-sum, fall back to t-test on error
+    tryCatch(wilcox.test(x1, x2)$p.value,
+             error = function(e) tryCatch(t.test(x1, x2)$p.value, error = function(e) NA))
+  }
+}
+
+# ==============================================================================
+# Compare categorical variables (Fisher's exact test)
+# ==============================================================================
+
+compare_categorical <- function(var, group) {
+  tbl <- table(var, group, useNA = "no")
+  if (nrow(tbl) < 2 || ncol(tbl) < 2) return(NA)
+  tryCatch(fisher.test(tbl)$p.value, error = function(e) NA)
+}
+
+# ==============================================================================
+# Compare binary variables (Fisher's exact test)
+# ==============================================================================
+
+compare_binary <- function(x, group) {
+  tbl <- table(x, group, useNA = "no")
+  if (nrow(tbl) < 2 || ncol(tbl) < 2) return(NA)
+  tryCatch(fisher.test(tbl)$p.value, error = function(e) NA)
 }
