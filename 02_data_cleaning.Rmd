@@ -1,5 +1,6 @@
 ---
 title: "ECPR Data Cleaning Pipeline"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M')`"
 output: html_document
 ---
 

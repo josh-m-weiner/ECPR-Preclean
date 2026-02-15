@@ -1,5 +1,6 @@
 ---
 title: "Paper #1, Table 1: All Patients Treated with the MMRC FLIGHT-ECPR Protocol"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M')`"
 output: html_document
 ---
 
@@ -73,7 +74,7 @@ table1 <- data.frame(
     mean_sd(table_data$hems_launch_time),
     mean_sd(table_data$hems_scene_time),
     mean_sd(table_data$hems_flight_time),
-    mean_sd(table_data$ecmo_time),
+    "N/A",
     n_pct(table_data$init_rhythm, "VT/VF"),
     n_pct(table_data$witnessed, 1),
     n_pct(table_data$bystander_cpr, 1),
@@ -83,7 +84,7 @@ table1 <- data.frame(
     mean_sd(table_data$lactate),
     mean_sd(table_data$ph),
     mean_sd(table_data$low_flow_time),
-    mean_sd(table_data$ecmo_days),
+    "N/A",
     mean_sd(table_data$los_days),
     n_pct(table_data$alive, 1)
   ),
